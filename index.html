@@ -1507,7 +1507,7 @@ async function modalCreateFolder() {
 async function createDriveFolder(name, parentId) {
   const meta = { name, mimeType: 'application/vnd.google-apps.folder' };
   if (parentId) meta.parents = [parentId];
-  const resp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+  const resp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink&supportsAllDrives=true', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify(meta),
@@ -1522,7 +1522,7 @@ async function uploadToDrive(name, blob, parentId) {
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
   form.append('file', blob, name);
-  const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+  const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + accessToken },
     body: form,
