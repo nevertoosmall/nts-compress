@@ -1378,26 +1378,31 @@ function updateAuthUI(signedIn) {
 
 // ── Drive Picker ──────────────────────────────────────────────────────────────
 function pickFolder() {
-  if (!pickerLoaded || !accessToken) return;
-  const myDriveView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-    .setSelectFolderEnabled(true).setIncludeFolders(true);
-  const sharedView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-    .setSelectFolderEnabled(true).setIncludeFolders(true)
-    .setEnableSharedDrives(true);
-  new google.picker.PickerBuilder()
-    .addView(myDriveView)
-    .addView(sharedView)
-    .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
-    .setOAuthToken(accessToken)
-    .setDeveloperKey(GOOGLE_API_KEY)
-    .setCallback(data => {
-      if (data.action === google.picker.Action.PICKED) {
-        selectedFolderId   = data.docs[0].id;
-        selectedFolderName = data.docs[0].name;
-        document.getElementById('folderName').textContent = selectedFolderName;
-      }
-    })
-    .build().setVisible(true);
+  if (!accessToken) { setStatus('Please sign in first.', 'err'); return; }
+  if (!pickerLoaded) { setStatus('Picker still loading — please try again in a moment.', 'err'); return; }
+  try {
+    const myDriveView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setSelectFolderEnabled(true).setIncludeFolders(true);
+    const sharedView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setSelectFolderEnabled(true).setIncludeFolders(true)
+      .setEnableSharedDrives(true);
+    new google.picker.PickerBuilder()
+      .addView(myDriveView)
+      .addView(sharedView)
+      .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+      .setOAuthToken(accessToken)
+      .setDeveloperKey(GOOGLE_API_KEY)
+      .setCallback(data => {
+        if (data.action === google.picker.Action.PICKED) {
+          selectedFolderId   = data.docs[0].id;
+          selectedFolderName = data.docs[0].name;
+          document.getElementById('folderName').textContent = selectedFolderName;
+        }
+      })
+      .build().setVisible(true);
+  } catch(e) {
+    setStatus('Picker error: ' + e.message, 'err');
+  }
 }
 
 function showNewFolder() {
