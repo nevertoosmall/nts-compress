@@ -45,7 +45,24 @@
   .status.err { color: #f87171; }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #333; border-top-color: #888; border-radius: 50%; animation: sp 0.7s linear infinite; vertical-align: middle; margin-right: 5px; }
   @keyframes sp { to { transform: rotate(360deg); } }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; }
+  .auth-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .btn-gsign { background: #fff; color: #222; border: none; border-radius: 6px; padding: 7px 12px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .btn-gsign:hover { background: #eee; }
+  .user-pill { display: flex; align-items: center; gap: 7px; background: #1a1a1a; border: 1.5px solid #272727; border-radius: 20px; padding: 4px 10px 4px 4px; }
+  .user-pill img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+  .user-pill span { font-size: 11px; color: #ccc; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-signout { background: none; border: none; color: #555; font-size: 10px; cursor: pointer; padding: 0 0 0 4px; }
+  .btn-signout:hover { color: #ef4444; }
+  .folder-pick { display: flex; align-items: center; gap: 8px; flex: 1; background: #1a1a1a; border: 1.5px solid #272727; border-radius: 6px; padding: 6px 10px; overflow: hidden; }
+  .folder-name { font-size: 12px; color: #aaa; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-pick { background: #1e1e1e; border: 1.5px solid #2e2e2e; color: #888; padding: 5px 12px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .btn-pick:hover { border-color: #444; color: #ccc; }
+  .btn-drive { background: #4285f4; color: #fff; }
+  .btn-drive:not(:disabled):hover { background: #3367d6; }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 </head>
 <body>
 
@@ -58,6 +75,26 @@
     <div class="main-preview-label">Main Image</div>
     <div class="main-preview-box" id="mainBox"><span class="main-preview-empty">Not set</span></div>
   </div>
+  <div class="auth-area">
+    <button class="btn-gsign" id="signInBtn" onclick="signIn()">
+      <svg width="16" height="16" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="user-pill" id="userPill" style="display:none">
+      <img id="userAvatar" src="" alt="">
+      <span id="userName"></span>
+      <button class="btn-signout" onclick="signOut()" title="Sign out">✕</button>
+    </div>
+  </div>
+</div>
+
+<div class="row" id="folderRow" style="display:none">
+  <label>Save to</label>
+  <div class="folder-pick">
+    <span>📁</span>
+    <span class="folder-name" id="folderName">My Drive</span>
+  </div>
+  <button class="btn-pick" onclick="pickFolder()">Choose folder</button>
 </div>
 
 <div class="row">
@@ -75,6 +112,7 @@
 
 <div class="actions">
   <span class="count" id="count">0 images</span>
+  <button class="btn btn-drive" id="driveBtn" disabled onclick="runCompressAndUpload()" style="display:none">&#8593; Compress &amp; Save to Drive</button>
   <button class="btn btn-zip" id="zipBtn" disabled onclick="runCompress()">&#8595; Compress &amp; Download ZIP</button>
 </div>
 <div class="status" id="status"></div>
@@ -1249,17 +1287,126 @@ X.B(E,Y);return E}return J}())
 })();
 </script>
 <script>
-let images = [], mainId = null, idCtr = 0;
+// ── Config — replace these with your Google Cloud credentials ─────────────────
+const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+const GOOGLE_API_KEY   = 'YOUR_API_KEY_HERE';
 
+// ── State ─────────────────────────────────────────────────────────────────────
+let images = [], mainId = null, idCtr = 0;
+let accessToken = null, tokenClient = null, pickerLoaded = false;
+let selectedFolderId = null, selectedFolderName = 'My Drive';
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
 const dropZone   = document.getElementById('dropZone');
 const fileInput  = document.getElementById('fileInput');
 const grid       = document.getElementById('grid');
 const zipBtn     = document.getElementById('zipBtn');
+const driveBtn   = document.getElementById('driveBtn');
 const titleInput = document.getElementById('postTitle');
 const countEl    = document.getElementById('count');
 const statusEl   = document.getElementById('status');
 const mainBox    = document.getElementById('mainBox');
 
+// ── Google auth ───────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const waitGsi = setInterval(() => {
+    if (window.google?.accounts?.oauth2) {
+      clearInterval(waitGsi);
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: resp => {
+          if (resp.error) { accessToken = null; updateAuthUI(false); return; }
+          accessToken = resp.access_token;
+          // Fetch user profile to show name/avatar
+          fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: 'Bearer ' + accessToken }
+          }).then(r => r.json()).then(u => {
+            document.getElementById('userName').textContent = u.given_name || u.name || '';
+            document.getElementById('userAvatar').src = u.picture || '';
+          });
+          updateAuthUI(true);
+          updateBtns();
+        },
+      });
+    }
+  }, 200);
+  const waitGapi = setInterval(() => {
+    if (window.gapi) {
+      clearInterval(waitGapi);
+      gapi.load('picker', () => { pickerLoaded = true; });
+    }
+  }, 200);
+});
+
+function signIn() {
+  if (!tokenClient) { setStatus('Google sign-in not ready — please wait a moment.', 'err'); return; }
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function signOut() {
+  if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+  accessToken = null; selectedFolderId = null; selectedFolderName = 'My Drive';
+  updateAuthUI(false); updateBtns();
+}
+
+function updateAuthUI(signedIn) {
+  document.getElementById('signInBtn').style.display  = signedIn ? 'none'  : '';
+  document.getElementById('userPill').style.display   = signedIn ? 'flex'  : 'none';
+  document.getElementById('folderRow').style.display  = signedIn ? 'flex'  : 'none';
+  document.getElementById('folderName').textContent   = selectedFolderName;
+  driveBtn.style.display = signedIn ? '' : 'none';
+  zipBtn.style.display   = signedIn ? 'none' : '';
+}
+
+// ── Drive Picker ──────────────────────────────────────────────────────────────
+function pickFolder() {
+  if (!pickerLoaded || !accessToken) return;
+  const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+    .setSelectFolderEnabled(true).setIncludeFolders(true);
+  new google.picker.PickerBuilder()
+    .addView(view)
+    .setOAuthToken(accessToken)
+    .setDeveloperKey(GOOGLE_API_KEY)
+    .setCallback(data => {
+      if (data.action === google.picker.Action.PICKED) {
+        selectedFolderId   = data.docs[0].id;
+        selectedFolderName = data.docs[0].name;
+        document.getElementById('folderName').textContent = selectedFolderName;
+      }
+    })
+    .build().setVisible(true);
+}
+
+// ── Drive API helpers ─────────────────────────────────────────────────────────
+async function createDriveFolder(name, parentId) {
+  const meta = { name, mimeType: 'application/vnd.google-apps.folder' };
+  if (parentId) meta.parents = [parentId];
+  const resp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(meta),
+  });
+  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || 'Failed to create folder'); }
+  return resp.json();
+}
+
+async function uploadToDrive(name, blob, parentId) {
+  const meta = { name };
+  if (parentId) meta.parents = [parentId];
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+  form.append('file', blob, name);
+  const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken },
+    body: form,
+  });
+  if (!resp.ok) { const e = await resp.json(); throw new Error(e.error?.message || 'Upload failed'); }
+  return resp.json();
+}
+
+// ── Image loading ─────────────────────────────────────────────────────────────
 dropZone.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
@@ -1270,67 +1417,39 @@ titleInput.addEventListener('input', updateBtns);
 function isTiff(file) {
   return file.type === 'image/tiff' || /\.tiff?$/i.test(file.name);
 }
-
 function readFileAsArrayBuffer(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = e => res(e.target.result);
-    r.onerror = rej;
-    r.readAsArrayBuffer(file);
-  });
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsArrayBuffer(file); });
 }
-
 function readFileAsDataURL(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = e => res(e.target.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
 }
-
 async function tiffToDataUrl(file) {
   const buf = await readFileAsArrayBuffer(file);
   const ifds = UTIF.decode(buf);
   if (!ifds.length) throw new Error('No IFDs found in TIFF');
   UTIF.decodeImage(buf, ifds[0]);
   const rgba = UTIF.toRGBA8(ifds[0]);
-  const w = ifds[0].width;
-  const h = ifds[0].height;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
+  const w = ifds[0].width, h = ifds[0].height;
+  const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
-  const imgData = ctx.createImageData(w, h);
-  imgData.data.set(rgba);
-  ctx.putImageData(imgData, 0, 0);
+  const imgData = ctx.createImageData(w, h); imgData.data.set(rgba); ctx.putImageData(imgData, 0, 0);
   return canvas.toDataURL('image/png');
 }
-
 async function fileToDataUrl(file) {
-  if (isTiff(file)) {
-    return tiffToDataUrl(file);
-  }
-  return readFileAsDataURL(file);
+  return isTiff(file) ? tiffToDataUrl(file) : readFileAsDataURL(file);
 }
-
 async function addFiles(files) {
   for (const f of [...files]) {
     if (!f.type.startsWith('image/') && !isTiff(f)) continue;
     const id = ++idCtr;
     setStatus(`<span class="spin"></span>Loading ${f.name}…`);
-    try {
-      const src = await fileToDataUrl(f);
-      images.push({ id, file: f, src });
-      render();
-    } catch(err) {
-      setStatus(`Could not load ${f.name}: ${err.message}`, 'err');
-      continue;
-    }
+    try { const src = await fileToDataUrl(f); images.push({ id, file: f, src }); render(); }
+    catch(err) { setStatus(`Could not load ${f.name}: ${err.message}`, 'err'); continue; }
   }
   setStatus('');
 }
 
+// ── Render ────────────────────────────────────────────────────────────────────
 function render() {
   grid.innerHTML = '';
   images.forEach(img => {
@@ -1347,13 +1466,16 @@ function render() {
   const m = images.find(i => i.id === mainId);
   mainBox.innerHTML = m ? `<img src="${m.src}">` : `<span class="main-preview-empty">Not set</span>`;
 }
-
-function setMain(id) { mainId = id; render(); }
-function removeImg(id) { images = images.filter(i => i.id !== id); if (mainId === id) mainId = null; render(); }
-function updateBtns() { zipBtn.disabled = !images.length || !titleInput.value.trim() || !mainId; }
-function slugify(s) { return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+function setMain(id)    { mainId = id; render(); }
+function removeImg(id)  { images = images.filter(i => i.id !== id); if (mainId === id) mainId = null; render(); }
+function updateBtns()   {
+  const ready = images.length > 0 && !!titleInput.value.trim() && !!mainId;
+  zipBtn.disabled = driveBtn.disabled = !ready;
+}
+function slugify(s)     { return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 function setStatus(msg, type) { statusEl.className = 'status' + (type ? ' ' + type : ''); statusEl.innerHTML = msg; }
 
+// ── Image processing ──────────────────────────────────────────────────────────
 function resizeToBlob(src, maxW, maxH) {
   return new Promise(res => {
     const img = new Image();
@@ -1367,7 +1489,6 @@ function resizeToBlob(src, maxW, maxH) {
     img.src = src;
   });
 }
-
 async function buildOutputFiles(slug) {
   const out = []; let idx = 1;
   for (const img of images) {
@@ -1383,7 +1504,28 @@ async function buildOutputFiles(slug) {
   return out;
 }
 
-// ── Pure-JS ZIP builder ───────────────────────────────────────────────────────
+// ── Save to Google Drive ──────────────────────────────────────────────────────
+async function runCompressAndUpload() {
+  const slug = slugify(titleInput.value.trim());
+  driveBtn.disabled = true;
+  setStatus('<span class="spin"></span>Processing images…');
+  try {
+    const files = await buildOutputFiles(slug);
+    setStatus('<span class="spin"></span>Creating folder in Drive…');
+    const folder = await createDriveFolder(`${slug}-compressed`, selectedFolderId);
+    let done = 0;
+    for (const { name, blob } of files) {
+      setStatus(`<span class="spin"></span>Uploading ${name} (${++done}/${files.length})…`);
+      await uploadToDrive(name, blob, folder.id);
+    }
+    setStatus(`✓ ${files.length} files saved — <a href="${folder.webViewLink}" target="_blank" style="color:#4ade80;text-decoration:underline">Open folder in Drive</a>`, 'ok');
+  } catch(e) {
+    setStatus(`Error: ${e.message}`, 'err');
+  }
+  updateBtns();
+}
+
+// ── Download ZIP (fallback) ───────────────────────────────────────────────────
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let i = 0; i < 256; i++) { let c = i; for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[i] = c; }
@@ -1393,7 +1535,6 @@ function crc32(data) { let c = 0xFFFFFFFF; for (let i = 0; i < data.length; i++)
 function u32(n) { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n, true); return b; }
 function u16(n) { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, n, true); return b; }
 function concat(arrays) { const t = arrays.reduce((s,a)=>s+a.length,0), o = new Uint8Array(t); let p=0; for (const a of arrays){o.set(a,p);p+=a.length;} return o; }
-
 async function buildZip(files) {
   const enc = new TextEncoder(), parts = [], cd = []; let offset = 0;
   for (const {name, blob} of files) {
@@ -1408,7 +1549,6 @@ async function buildZip(files) {
   const eocd = concat([new Uint8Array([0x50,0x4B,0x05,0x06]),u16(0),u16(0),u16(files.length),u16(files.length),u32(cdBytes.length),u32(offset),u16(0)]);
   return new Blob([concat(parts), cdBytes, eocd], { type: 'application/zip' });
 }
-
 async function runCompress() {
   const slug = slugify(titleInput.value.trim());
   zipBtn.disabled = true;
@@ -1420,9 +1560,7 @@ async function runCompress() {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(zip);
     a.download = `${slug}-compressed.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
     setStatus(`✓ Downloaded ${slug}-compressed.zip — ${files.length} files`, 'ok');
   } catch(e) {
