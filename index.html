@@ -1384,8 +1384,7 @@ function pickFolder() {
     const myDriveView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
       .setSelectFolderEnabled(true).setIncludeFolders(true);
     const sharedView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setSelectFolderEnabled(true).setIncludeFolders(true)
-      .setEnableSharedDrives(true);
+      .setSelectFolderEnabled(true).setIncludeFolders(true);
     new google.picker.PickerBuilder()
       .addView(myDriveView)
       .addView(sharedView)
