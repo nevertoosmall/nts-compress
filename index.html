@@ -45,6 +45,36 @@
   .status.err { color: #f87171; }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #333; border-top-color: #888; border-radius: 50%; animation: sp 0.7s linear infinite; vertical-align: middle; margin-right: 5px; }
   @keyframes sp { to { transform: rotate(360deg); } }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-box { background: #161616; border: 1.5px solid #2a2a2a; border-radius: 12px; width: 460px; max-width: 96vw; display: flex; flex-direction: column; overflow: hidden; max-height: 85vh; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 12px; border-bottom: 1px solid #1e1e1e; flex-shrink: 0; }
+  .modal-head span { font-size: 13px; font-weight: 700; color: #fff; }
+  .modal-close { background: none; border: none; color: #555; font-size: 18px; cursor: pointer; line-height: 1; padding: 0; }
+  .modal-close:hover { color: #eee; }
+  .modal-crumb { padding: 9px 16px; font-size: 11px; border-bottom: 1px solid #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .modal-crumb a { color: #555; cursor: pointer; text-decoration: none; }
+  .modal-crumb a:hover { color: #aaa; }
+  .modal-crumb .sep { color: #333; margin: 0 5px; }
+  .modal-crumb .current { color: #aaa; }
+  .modal-list { overflow-y: auto; flex: 1; }
+  .folder-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; border-bottom: 1px solid #191919; }
+  .folder-item:hover { background: #1c1c1c; }
+  .folder-item .fi-name { flex: 1; font-size: 12px; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folder-item .fi-arrow { color: #333; font-size: 14px; }
+  .modal-empty { padding: 20px 16px; font-size: 12px; color: #444; text-align: center; }
+  .modal-loading { padding: 20px 16px; font-size: 12px; color: #444; text-align: center; }
+  .modal-new { display: flex; gap: 6px; padding: 10px 16px; border-top: 1px solid #1a1a1a; flex-shrink: 0; }
+  .modal-new input { flex: 1; background: #111; border: 1.5px solid #252525; border-radius: 6px; color: #eee; padding: 6px 10px; font-size: 12px; outline: none; }
+  .modal-new input:focus { border-color: #3a3a3a; }
+  .modal-new input::placeholder { color: #383838; }
+  .btn-modal-create { background: #1e1e1e; border: 1.5px solid #2e2e2e; color: #888; padding: 6px 12px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-modal-create:hover { border-color: #444; color: #ccc; }
+  .modal-foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #1e1e1e; flex-shrink: 0; }
+  .btn-select { background: #4ade80; color: #000; border: none; border-radius: 7px; padding: 9px 16px; font-size: 12px; font-weight: 700; cursor: pointer; flex: 1; }
+  .btn-select:hover { background: #22c55e; }
+  .btn-modal-cancel { background: none; border: 1.5px solid #272727; color: #666; border-radius: 7px; padding: 9px 16px; font-size: 12px; cursor: pointer; }
+  .btn-modal-cancel:hover { border-color: #3a3a3a; color: #aaa; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; }
   .auth-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .btn-gsign { background: #fff; color: #222; border: none; border-radius: 6px; padding: 7px 12px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
@@ -68,7 +98,6 @@
   .btn-drive:not(:disabled):hover { background: #3367d6; }
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
 </head>
 <body>
 
@@ -102,14 +131,8 @@
       <span class="folder-name" id="folderName">My Drive</span>
     </div>
     <button class="btn-pick" onclick="pickFolder()">Browse</button>
-    <button class="btn-pick" onclick="showNewFolder()">+ New folder</button>
   </div>
-  <div class="new-folder-row" id="newFolderRow" style="display:none">
-    <label style="font-size:11px;color:#777;white-space:nowrap">Folder name</label>
-    <input type="text" id="newFolderInput" placeholder="e.g. Editorial — March 2026" />
-    <button class="btn-create" onclick="createNewFolder()">Create</button>
-    <button class="btn-cancel-folder" onclick="hideNewFolder()">Cancel</button>
-  </div>
+
 </div>
 
 <div class="row">
@@ -1302,13 +1325,12 @@ X.B(E,Y);return E}return J}())
 })();
 </script>
 <script>
-// ── Config — replace these with your Google Cloud credentials ─────────────────
+// ── Config ────────────────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = '61595720761-jm2qki354old9lep4ooa8div6g57ka0r.apps.googleusercontent.com';
-const GOOGLE_API_KEY   = 'AIzaSyC671MCN26hxGPunZDPwRye9HlGAh_0lIQ';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let images = [], mainId = null, idCtr = 0;
-let accessToken = null, tokenClient = null, pickerLoaded = false;
+let accessToken = null, tokenClient = null;
 let selectedFolderId = null, selectedFolderName = 'My Drive';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -1348,12 +1370,7 @@ window.addEventListener('load', () => {
       });
     }
   }, 200);
-  const waitGapi = setInterval(() => {
-    if (window.gapi) {
-      clearInterval(waitGapi);
-      gapi.load('picker', () => { pickerLoaded = true; });
-    }
-  }, 200);
+
 });
 
 function signIn() {
@@ -1376,55 +1393,113 @@ function updateAuthUI(signedIn) {
   zipBtn.style.display   = signedIn ? 'none' : '';
 }
 
-// ── Drive Picker ──────────────────────────────────────────────────────────────
+// ── Custom folder browser ─────────────────────────────────────────────────────
+let browserStack = []; // [{id, name}]
+
 function pickFolder() {
   if (!accessToken) { setStatus('Please sign in first.', 'err'); return; }
-  if (!pickerLoaded) { setStatus('Picker still loading — please try again in a moment.', 'err'); return; }
+  browserStack = [];
+  document.getElementById('folderModal').style.display = 'flex';
+  renderFolderBrowser();
+}
+
+function closeFolderModal() {
+  document.getElementById('folderModal').style.display = 'none';
+  document.getElementById('modalNewInput').value = '';
+}
+
+function browserCurrentId() {
+  return browserStack.length ? browserStack[browserStack.length - 1].id : null;
+}
+
+async function renderFolderBrowser() {
+  const list = document.getElementById('modalList');
+  list.innerHTML = '<div class="modal-loading"><span class="spin"></span> Loading…</div>';
+
+  // Breadcrumb
+  const crumb = document.getElementById('modalCrumb');
+  let crumbHtml = '<a onclick="browserNavTo(-1)">Home</a>';
+  browserStack.forEach((item, i) => {
+    crumbHtml += `<span class="sep">/</span>`;
+    if (i < browserStack.length - 1) {
+      crumbHtml += `<a onclick="browserNavTo(${i})">${item.name}</a>`;
+    } else {
+      crumbHtml += `<span class="current">${item.name}</span>`;
+    }
+  });
+  crumb.innerHTML = crumbHtml;
+
+  // Select button label
+  const currentName = browserStack.length ? browserStack[browserStack.length-1].name : 'My Drive';
+  document.getElementById('modalSelectBtn').textContent = `Select "${currentName}"`;
+
   try {
-    const myDriveView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setSelectFolderEnabled(true).setIncludeFolders(true);
-    const sharedView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setSelectFolderEnabled(true).setIncludeFolders(true);
-    new google.picker.PickerBuilder()
-      .addView(myDriveView)
-      .addView(sharedView)
-      .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
-      .setOAuthToken(accessToken)
-      .setDeveloperKey(GOOGLE_API_KEY)
-      .setCallback(data => {
-        if (data.action === google.picker.Action.PICKED) {
-          selectedFolderId   = data.docs[0].id;
-          selectedFolderName = data.docs[0].name;
-          document.getElementById('folderName').textContent = selectedFolderName;
-        }
-      })
-      .build().setVisible(true);
+    let folders = [];
+    const curId = browserCurrentId();
+    if (curId === null) {
+      // Top level: My Drive + Shared Drives
+      const drivesResp = await fetch(
+        'https://www.googleapis.com/drive/v3/drives?pageSize=50',
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const drivesData = await drivesResp.json();
+      const sharedDrives = (drivesData.drives || []).map(d => ({ id: d.id, name: d.name, icon: '🔗' }));
+      folders = [{ id: 'root', name: 'My Drive', icon: '🏠' }, ...sharedDrives];
+    } else {
+      const q = encodeURIComponent(`'${curId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+      const resp = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=name&pageSize=200&includeItemsFromAllDrives=true&supportsAllDrives=true`,
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const data = await resp.json();
+      folders = (data.files || []).map(f => ({ id: f.id, name: f.name, icon: '📁' }));
+    }
+
+    if (!folders.length) {
+      list.innerHTML = '<div class="modal-empty">No folders here</div>';
+      return;
+    }
+    list.innerHTML = '';
+    folders.forEach(f => {
+      const div = document.createElement('div');
+      div.className = 'folder-item';
+      div.innerHTML = `<span>${f.icon || '📁'}</span><span class="fi-name">${f.name}</span><span class="fi-arrow">›</span>`;
+      div.onclick = () => { browserStack.push({ id: f.id, name: f.name }); renderFolderBrowser(); };
+      list.appendChild(div);
+    });
   } catch(e) {
-    setStatus('Picker error: ' + e.message, 'err');
+    list.innerHTML = `<div class="modal-empty" style="color:#f87171">Error: ${e.message}</div>`;
   }
 }
 
-function showNewFolder() {
-  document.getElementById('newFolderRow').style.display = 'flex';
-  document.getElementById('newFolderInput').focus();
+function browserNavTo(index) {
+  // index -1 = home, 0..n = stack position
+  browserStack = index < 0 ? [] : browserStack.slice(0, index + 1);
+  renderFolderBrowser();
 }
-function hideNewFolder() {
-  document.getElementById('newFolderRow').style.display = 'none';
-  document.getElementById('newFolderInput').value = '';
+
+function modalSelectCurrent() {
+  const cur = browserStack.length ? browserStack[browserStack.length - 1] : { id: null, name: 'My Drive' };
+  selectedFolderId   = cur.id;
+  selectedFolderName = cur.name;
+  document.getElementById('folderName').textContent = cur.name;
+  closeFolderModal();
 }
-async function createNewFolder() {
-  const name = document.getElementById('newFolderInput').value.trim();
+
+async function modalCreateFolder() {
+  const name = document.getElementById('modalNewInput').value.trim();
   if (!name) return;
+  const btn = document.querySelector('.btn-modal-create');
+  btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    setStatus('<span class="spin"></span>Creating folder…');
-    const folder = await createDriveFolder(name, selectedFolderId || null);
-    selectedFolderId   = folder.id;
-    selectedFolderName = name;
-    document.getElementById('folderName').textContent = name;
-    hideNewFolder();
-    setStatus('');
+    const folder = await createDriveFolder(name, browserCurrentId());
+    document.getElementById('modalNewInput').value = '';
+    browserStack.push({ id: folder.id, name });
+    renderFolderBrowser();
   } catch(e) {
-    setStatus('Could not create folder: ' + e.message, 'err');
+    alert('Could not create folder: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '+ Create here';
   }
 }
 
@@ -1619,5 +1694,24 @@ async function runCompress() {
   updateBtns();
 }
 </script>
+
+<div class="modal-overlay" id="folderModal" style="display:none" onclick="if(event.target===this)closeFolderModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span>Choose destination folder</span>
+      <button class="modal-close" onclick="closeFolderModal()">&#215;</button>
+    </div>
+    <div class="modal-crumb" id="modalCrumb"></div>
+    <div class="modal-list" id="modalList"></div>
+    <div class="modal-new">
+      <input type="text" id="modalNewInput" placeholder="New folder name…" onkeydown="if(event.key==='Enter')modalCreateFolder()" />
+      <button class="btn-modal-create" onclick="modalCreateFolder()">+ Create here</button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-select" id="modalSelectBtn" onclick="modalSelectCurrent()">Select current folder</button>
+      <button class="btn-modal-cancel" onclick="closeFolderModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
