@@ -58,6 +58,12 @@
   .folder-name { font-size: 12px; color: #aaa; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .btn-pick { background: #1e1e1e; border: 1.5px solid #2e2e2e; color: #888; padding: 5px 12px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
   .btn-pick:hover { border-color: #444; color: #ccc; }
+  .new-folder-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .new-folder-row input { flex: 1; background: #1a1a1a; border: 1.5px solid #272727; border-radius: 6px; color: #eee; padding: 6px 10px; font-size: 12px; outline: none; }
+  .new-folder-row input:focus { border-color: #444; }
+  .btn-create { background: #4ade80; color: #000; border: none; border-radius: 5px; padding: 5px 12px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-cancel-folder { background: none; border: none; color: #555; font-size: 11px; cursor: pointer; }
+  .btn-cancel-folder:hover { color: #ef4444; }
   .btn-drive { background: #4285f4; color: #fff; }
   .btn-drive:not(:disabled):hover { background: #3367d6; }
 </style>
@@ -81,20 +87,29 @@
       Sign in with Google
     </button>
     <div class="user-pill" id="userPill" style="display:none">
-      <img id="userAvatar" src="" alt="">
+      <img id="userAvatar" src="" alt="" style="display:none">
       <span id="userName"></span>
       <button class="btn-signout" onclick="signOut()" title="Sign out">✕</button>
     </div>
   </div>
 </div>
 
-<div class="row" id="folderRow" style="display:none">
-  <label>Save to</label>
-  <div class="folder-pick">
-    <span>📁</span>
-    <span class="folder-name" id="folderName">My Drive</span>
+<div id="folderRow" style="display:none">
+  <div class="row" style="margin-bottom:0">
+    <label>Save to</label>
+    <div class="folder-pick">
+      <span>📁</span>
+      <span class="folder-name" id="folderName">My Drive</span>
+    </div>
+    <button class="btn-pick" onclick="pickFolder()">Browse</button>
+    <button class="btn-pick" onclick="showNewFolder()">+ New folder</button>
   </div>
-  <button class="btn-pick" onclick="pickFolder()">Choose folder</button>
+  <div class="new-folder-row" id="newFolderRow" style="display:none">
+    <label style="font-size:11px;color:#777;white-space:nowrap">Folder name</label>
+    <input type="text" id="newFolderInput" placeholder="e.g. Editorial — March 2026" />
+    <button class="btn-create" onclick="createNewFolder()">Create</button>
+    <button class="btn-cancel-folder" onclick="hideNewFolder()">Cancel</button>
+  </div>
 </div>
 
 <div class="row">
@@ -1314,7 +1329,7 @@ window.addEventListener('load', () => {
       clearInterval(waitGsi);
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.file',
+        scope: 'https://www.googleapis.com/auth/drive',
         callback: resp => {
           if (resp.error) { accessToken = null; updateAuthUI(false); return; }
           accessToken = resp.access_token;
@@ -1323,7 +1338,9 @@ window.addEventListener('load', () => {
             headers: { Authorization: 'Bearer ' + accessToken }
           }).then(r => r.json()).then(u => {
             document.getElementById('userName').textContent = u.given_name || u.name || '';
-            document.getElementById('userAvatar').src = u.picture || '';
+            const av = document.getElementById('userAvatar');
+            if (u.picture) { av.src = u.picture; av.style.display = ''; }
+            else { av.style.display = 'none'; }
           });
           updateAuthUI(true);
           updateBtns();
@@ -1362,10 +1379,15 @@ function updateAuthUI(signedIn) {
 // ── Drive Picker ──────────────────────────────────────────────────────────────
 function pickFolder() {
   if (!pickerLoaded || !accessToken) return;
-  const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+  const myDriveView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
     .setSelectFolderEnabled(true).setIncludeFolders(true);
+  const sharedView = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+    .setSelectFolderEnabled(true).setIncludeFolders(true)
+    .setEnableSharedDrives(true);
   new google.picker.PickerBuilder()
-    .addView(view)
+    .addView(myDriveView)
+    .addView(sharedView)
+    .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
     .setOAuthToken(accessToken)
     .setDeveloperKey(GOOGLE_API_KEY)
     .setCallback(data => {
@@ -1376,6 +1398,30 @@ function pickFolder() {
       }
     })
     .build().setVisible(true);
+}
+
+function showNewFolder() {
+  document.getElementById('newFolderRow').style.display = 'flex';
+  document.getElementById('newFolderInput').focus();
+}
+function hideNewFolder() {
+  document.getElementById('newFolderRow').style.display = 'none';
+  document.getElementById('newFolderInput').value = '';
+}
+async function createNewFolder() {
+  const name = document.getElementById('newFolderInput').value.trim();
+  if (!name) return;
+  try {
+    setStatus('<span class="spin"></span>Creating folder…');
+    const folder = await createDriveFolder(name, selectedFolderId || null);
+    selectedFolderId   = folder.id;
+    selectedFolderName = name;
+    document.getElementById('folderName').textContent = name;
+    hideNewFolder();
+    setStatus('');
+  } catch(e) {
+    setStatus('Could not create folder: ' + e.message, 'err');
+  }
 }
 
 // ── Drive API helpers ─────────────────────────────────────────────────────────
